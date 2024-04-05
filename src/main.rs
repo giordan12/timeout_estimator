@@ -7,7 +7,9 @@
 // 2. The system needs to run the simulation and give me my score for this value
 
 use bdays::HolidayCalendar;
-use chrono::{prelude, Datelike, Days, Local, Months, NaiveDate, Weekday};
+use chrono::{
+    prelude, DateTime, Datelike, Days, Duration, Local, Months, NaiveDate, TimeZone, Weekday,
+};
 use clap::Parser;
 
 #[derive(Parser, Debug)]
@@ -49,21 +51,106 @@ fn main() {
     let cal = bdays::calendars::us::USSettlement;
     let work_checks_period = chrono::TimeDelta::weeks(9);
 
-    let mut current_time = Local::now();
+    let mut current_day = Local::now();
 
-    let mut next_monday: Weekday;
-    loop {
-        next_monday = current_time.weekday();
-        match next_monday {
-            Weekday::Mon => break,
-            _ => {
-                current_time = current_time
-                    .checked_add_days(Days::new(1))
-                    .expect("Adding one day to date should be valid")
-            }
-        }
-    }
+    // let mut next_monday: Weekday;
+    // loop {
+    //     next_monday = current_day.weekday();
+    //     match next_monday {
+    //         Weekday::Mon => break,
+    //         _ => {
+    //             current_day = current_day
+    //                 .checked_add_days(Days::new(1))
+    //                 .expect("Adding one day to date should be valid")
+    //         }
+    //     }
+    // }
+
+    // while (current_day.weekday() != Weekday::Mon) {
+    //     current_day = current_day
+    //         .checked_add_days(Days::new(1))
+    //         .expect("Should be able to add days");
+    // }
 
     // By this point the next_monday var should hold the datetime for the next monday
-    println!("{:}", current_time)
+
+    let mut future_date = get_next_monday(current_day);
+    println!("{:}", future_date);
+
+    //
+    // We will get the number of days in the first week, based on the input parameter
+    // we will get how many days we will miss. then we go to the next week and estimate
+    // the number of days that we will go to the office (assume we go to the office 1 per week)
+    // We will assume that in 3 weeks we will again skip the same number of days from the office
+    // and repeat the process until we process 12 weeks. then we select the 9 number values
+    // and get the average
+    //
+
+    // TODO we need a list of some sort where we can hold the percentages
+
+    let max_number_of_weeks: u8 = 12;
+
+    for week_number in 0..max_number_of_weeks {
+        println!(
+            "Estimating percentage of attendance for week {}",
+            week_number + 1
+        );
+
+        let mut percentage_total: u8 = 0;
+
+        // Here we need to iterate over the days of the week, we start on Monday
+        // and finish on Friday
+
+        // TODO every 4 weeks we need to skip the amount of days that we indicated
+        // in the cli arg. (We are assuming we travel every 4 weeks)
+
+        while future_date.weekday() != Weekday::Sat {
+            if cal.is_bday(future_date) {
+                println!(
+                    "Day {} is a business day so we need to look into it",
+                    future_date
+                );
+                percentage_total += 20;
+            } else if cal.is_holiday(future_date) {
+                println!(
+                    "Yupiieee, {} is a holiday so we count it for us",
+                    future_date
+                );
+                percentage_total += 20;
+            }
+
+            future_date = future_date
+                .checked_add_days(Days::new(1))
+                .expect("Should be able to add days");
+        }
+
+        if (week_number % 4) == 0 {
+            // either it is the beginning of the period or 4 weeks have passed. We can substract the number of
+            // days we will miss
+
+            percentage_total -= (days_will_miss * 20) // This assumes that we will only miss less than or equal to 5 days
+                                                      // TODO we need to be able to estimate the percentage that each day contributes to the total 100%
+        }
+
+        println!("Percentage for this week is {}%", percentage_total);
+
+        // By this point we have gone over all possible working days of the week
+        // now we need to iterate until the next monday
+        future_date = get_next_monday(future_date);
+    }
+
+    // TODO over here we should have a list with percentage of attendance
+    // we sort the values in descending order and grab the first 9. We get
+    // the average of these and then we get their average. That's what we print
+}
+
+// I tried other ways but I couldn't do that, this is the only thing that worked for me
+fn get_next_monday<T: TimeZone>(current_date: DateTime<T>) -> DateTime<T> {
+    let mut next_monday: DateTime<T> = current_date.clone();
+    while next_monday.weekday() != Weekday::Mon {
+        next_monday = next_monday
+            .checked_add_days(Days::new(1))
+            .expect("Should be able to add days");
+    }
+    next_monday
 }
