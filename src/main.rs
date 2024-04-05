@@ -6,6 +6,8 @@
 // 1. I need a way to specify the system how much time I plan to spend in Dallas
 // 2. The system needs to run the simulation and give me my score for this value
 
+use std::{cmp::Ordering, ops::Div};
+
 use bdays::HolidayCalendar;
 use chrono::{
     prelude, DateTime, Datelike, Days, Duration, Local, Months, NaiveDate, TimeZone, Weekday,
@@ -53,27 +55,6 @@ fn main() {
 
     let mut current_day = Local::now();
 
-    // let mut next_monday: Weekday;
-    // loop {
-    //     next_monday = current_day.weekday();
-    //     match next_monday {
-    //         Weekday::Mon => break,
-    //         _ => {
-    //             current_day = current_day
-    //                 .checked_add_days(Days::new(1))
-    //                 .expect("Adding one day to date should be valid")
-    //         }
-    //     }
-    // }
-
-    // while (current_day.weekday() != Weekday::Mon) {
-    //     current_day = current_day
-    //         .checked_add_days(Days::new(1))
-    //         .expect("Should be able to add days");
-    // }
-
-    // By this point the next_monday var should hold the datetime for the next monday
-
     let mut future_date = get_next_monday(current_day);
     println!("{:}", future_date);
 
@@ -88,6 +69,8 @@ fn main() {
 
     // TODO we need a list of some sort where we can hold the percentages
 
+    let mut week_percentages: Vec<u8> = vec![]; // This vector will hold the percentages for each week
+
     let max_number_of_weeks: u8 = 12;
 
     for week_number in 0..max_number_of_weeks {
@@ -100,9 +83,6 @@ fn main() {
 
         // Here we need to iterate over the days of the week, we start on Monday
         // and finish on Friday
-
-        // TODO every 4 weeks we need to skip the amount of days that we indicated
-        // in the cli arg. (We are assuming we travel every 4 weeks)
 
         while future_date.weekday() != Weekday::Sat {
             if cal.is_bday(future_date) {
@@ -124,6 +104,7 @@ fn main() {
                 .expect("Should be able to add days");
         }
 
+        // Every 4 weeks we will skip the number of days that we specified in the command line argument
         if (week_number % 4) == 0 {
             // either it is the beginning of the period or 4 weeks have passed. We can substract the number of
             // days we will miss
@@ -134,14 +115,33 @@ fn main() {
 
         println!("Percentage for this week is {}%", percentage_total);
 
+        week_percentages.push(percentage_total); // by this point we estimated the percentage of attendance for this week and we can add it to the list
+
         // By this point we have gone over all possible working days of the week
         // now we need to iterate until the next monday
         future_date = get_next_monday(future_date);
     }
 
-    // TODO over here we should have a list with percentage of attendance
-    // we sort the values in descending order and grab the first 9. We get
-    // the average of these and then we get their average. That's what we print
+    if (week_percentages.len() < 12) {
+        panic!("The final list of percentages doesn't have as many values as expected");
+    }
+
+    // week_percentages holds the 12 percentages, we just need to get the 9 highest and average
+
+    println!(
+        "week percentages before sorting are: {:?}",
+        week_percentages
+    );
+    week_percentages.sort_by(|a, b| b.cmp(a));
+    println!("after sorting the percentages are: {:?}", week_percentages);
+
+    // list is sorted by now, now we need to get the averages of the top 9
+    let top_9_percentages = &week_percentages[0..9]; // I didn't know that for ranges the right and left side were inclusive
+    println!("top 9 values are {:?}", top_9_percentages);
+
+    let top_9_sum: u16 = top_9_percentages.iter().map(|x| *x as u16).sum(); // I'm not fully sure how slices and vectors work, I need to study
+    let average = top_9_sum.div(top_9_percentages.len() as u16);
+    print!("Final average is {:}", average);
 }
 
 // I tried other ways but I couldn't do that, this is the only thing that worked for me
