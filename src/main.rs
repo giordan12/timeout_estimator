@@ -6,6 +6,11 @@
 // 1. I need a way to specify the system how much time I plan to spend in Dallas
 // 2. The system needs to run the simulation and give me my score for this value
 
+// From teams description:
+// This is calculated by taking your BELT (Best Eight Last Twelve = last 12 weeks averaging
+// the highest attended 8 weeks based on badging activity) and rounded to days of week
+// in 20% increments. BELT > 5 will be considered 0% work from home
+
 use std::{cmp::Ordering, ops::Div};
 
 use bdays::HolidayCalendar;
@@ -23,9 +28,6 @@ struct Args {
 }
 
 fn main() {
-    // How to pass how much I plan to stay away? I think the unit needs to be in days
-    // Also I should keep in mind that the week has 5 working days.
-
     let args = Args::parse();
     let days_will_miss = args.days;
 
@@ -58,16 +60,12 @@ fn main() {
     let mut future_date = get_next_monday(current_day);
     println!("{:}", future_date);
 
-    //
     // We will get the number of days in the first week, based on the input parameter
     // we will get how many days we will miss. then we go to the next week and estimate
     // the number of days that we will go to the office (assume we go to the office 1 per week)
     // We will assume that in 3 weeks we will again skip the same number of days from the office
     // and repeat the process until we process 12 weeks. then we select the 9 number values
     // and get the average
-    //
-
-    // TODO we need a list of some sort where we can hold the percentages
 
     let mut week_percentages: Vec<u8> = vec![]; // This vector will hold the percentages for each week
 
@@ -93,7 +91,7 @@ fn main() {
                 percentage_total += 20;
             } else if cal.is_holiday(future_date) {
                 println!(
-                    "Yupiieee, {} is a holiday so we count it for us",
+                    "Yupiieee, {} is a holiday so we count it for us", // TODO need to confirm if holidays are counted for me or not
                     future_date
                 );
                 percentage_total += 20;
@@ -126,7 +124,7 @@ fn main() {
         panic!("The final list of percentages doesn't have as many values as expected");
     }
 
-    // week_percentages holds the 12 percentages, we just need to get the 9 highest and average
+    // week_percentages holds the 12 percentages, we just need to get the 8 highest and average
 
     println!(
         "week percentages before sorting are: {:?}",
@@ -136,7 +134,7 @@ fn main() {
     println!("after sorting the percentages are: {:?}", week_percentages);
 
     // list is sorted by now, now we need to get the averages of the top 9
-    let top_9_percentages = &week_percentages[0..9]; // I didn't know that for ranges the right and left side were inclusive
+    let top_9_percentages = &week_percentages[0..8]; // I didn't know that for ranges the right and left side were inclusive
     println!("top 9 values are {:?}", top_9_percentages);
 
     let top_9_sum: u16 = top_9_percentages.iter().map(|x| *x as u16).sum(); // I'm not fully sure how slices and vectors work, I need to study
