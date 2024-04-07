@@ -13,7 +13,7 @@
 
 use std::{cmp::Ordering, ops::Div};
 
-use bdays::HolidayCalendar;
+use bdays::{calendars::us::USSettlement, HolidayCalendar};
 use chrono::{
     prelude, DateTime, Datelike, Days, Duration, Local, Months, NaiveDate, TimeZone, Weekday,
 };
@@ -25,11 +25,16 @@ struct Args {
     /// Number of days you will not go to the office
     #[arg(short)]
     days: u8,
+
+    // How often I won't work from the office
+    #[arg(short, default_value_t = 4)]
+    frequency: u8, // todo I need to define a default frequency
 }
 
 fn main() {
     let args = Args::parse();
     let days_will_miss = args.days;
+    let frequency_to_work_oof = args.frequency;
 
     // We will assume that all days to miss will begin counting from Monday
     // TODO handle specifying different days to start the missing period
@@ -55,7 +60,7 @@ fn main() {
     let cal = bdays::calendars::us::USSettlement;
     let work_checks_period = chrono::TimeDelta::weeks(9);
 
-    let mut current_day = Local::now();
+    let mut current_day: DateTime<Local> = Local::now();
 
     let mut future_date = get_next_monday(current_day);
     println!("{:}", future_date);
@@ -103,7 +108,7 @@ fn main() {
         }
 
         // Every 4 weeks we will skip the number of days that we specified in the command line argument
-        if (week_number % 4) == 0 {
+        if (week_number % frequency_to_work_oof) == 0 {
             // either it is the beginning of the period or 4 weeks have passed. We can substract the number of
             // days we will miss
 
@@ -140,6 +145,56 @@ fn main() {
     let top_9_sum: u16 = top_9_percentages.iter().map(|x| *x as u16).sum(); // I'm not fully sure how slices and vectors work, I need to study
     let average = top_9_sum.div(top_9_percentages.len() as u16);
     print!("Final average is {:}", average);
+}
+
+fn run_simulation(days_to_work_oof: u8, frequency_to_work_oof: u8) {
+    let cal = bdays::calendars::us::USSettlement;
+
+    let mut current_day = Local::now();
+    let mut future_date = get_next_monday(current_day);
+    println!("Next monday from today is {:}", future_date);
+
+    let mut week_percentages: Vec<u8> = vec![]; // This vector will hold the percentages for each week
+
+    let max_number_of_weeks: u8 = 12;
+
+    for week_number in 0..max_number_of_weeks {
+        println!(
+            "Estimating percentage of attendance for week {}",
+            week_number + 1
+        );
+
+        let mut percentage_total: u8 = 0; // This var will hold the final percentage for this week
+
+        while future_date.weekday() != Weekday::Sat {
+            if cal.is_bday(future_date) {
+                println!(
+                    "Day {} is a business day so we need to go to work",
+                    future_date
+                );
+                percentage_total += 20;
+            } else if cal.is_holiday(future_date) {
+                println!(
+                    "Yupiiee, {} is a holiday so we count it for us", // TODO need to confirm if holidays count for me
+                    future_date
+                );
+                percentage_total += 20;
+            }
+
+            future_date = future_date
+                .checked_add_days(Days::new(1))
+                .expect("Should be able to add days");
+        }
+    }
+}
+
+fn simulate_week(week_day: DateTime<Local>, calendar: &USSettlement) {
+    while week_day.weekday() != Weekday::Sat {
+        if calendar.is_bday(week_day) {
+            println!("Day is a business day so we need to go to work");
+        }
+    } // TODO finish this so it doesn't fail. we need to use a DateTime<local> for it work
+      // maybe we will need to to make it mutable as well
 }
 
 // I tried other ways but I couldn't do that, this is the only thing that worked for me
