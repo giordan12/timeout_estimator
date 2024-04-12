@@ -53,24 +53,15 @@ fn main() {
     // of the 9 maximum percentages.
     //
 
-    // I need to find a way to get the number of days in the next 12 weeks. Based on that,
-    // I can get how many days I would miss and then group the rest in groups of 5.
-    //
+    run_simulation(frequency_to_work_oof, days_will_miss);
+}
 
+fn run_simulation(frequency_to_work_oof: u8, days_will_miss: u8) {
     let cal = bdays::calendars::us::USSettlement;
-    let work_checks_period = chrono::TimeDelta::weeks(9);
 
-    let mut current_day: DateTime<Local> = Local::now();
-
-    let mut future_date = get_next_monday(current_day);
-    println!("{:}", future_date);
-
-    // We will get the number of days in the first week, based on the input parameter
-    // we will get how many days we will miss. then we go to the next week and estimate
-    // the number of days that we will go to the office (assume we go to the office 1 per week)
-    // We will assume that in 3 weeks we will again skip the same number of days from the office
-    // and repeat the process until we process 12 weeks. then we select the 9 number values
-    // and get the average
+    let current_day = Local::now();
+    let mut some_monday = get_next_monday(current_day);
+    println!("Next monday from today is {:}", some_monday);
 
     let mut week_percentages: Vec<u8> = vec![]; // This vector will hold the percentages for each week
 
@@ -82,30 +73,7 @@ fn main() {
             week_number + 1
         );
 
-        let mut percentage_total: u8 = 0;
-
-        // Here we need to iterate over the days of the week, we start on Monday
-        // and finish on Friday
-
-        while future_date.weekday() != Weekday::Sat {
-            if cal.is_bday(future_date) {
-                println!(
-                    "Day {} is a business day so we need to look into it",
-                    future_date
-                );
-                percentage_total += 20;
-            } else if cal.is_holiday(future_date) {
-                println!(
-                    "Yupiieee, {} is a holiday so we count it for us", // TODO need to confirm if holidays are counted for me or not
-                    future_date
-                );
-                percentage_total += 20;
-            }
-
-            future_date = future_date
-                .checked_add_days(Days::new(1))
-                .expect("Should be able to add days");
-        }
+        let mut percentage_total = get_weeks_percentage_add(&some_monday, &cal);
 
         // Every 4 weeks we will skip the number of days that we specified in the command line argument
         if (week_number % frequency_to_work_oof) == 0 {
@@ -122,79 +90,65 @@ fn main() {
 
         // By this point we have gone over all possible working days of the week
         // now we need to iterate until the next monday
-        future_date = get_next_monday(future_date);
+        some_monday = get_next_monday(some_monday);
     }
-
-    if (week_percentages.len() < 12) {
-        panic!("The final list of percentages doesn't have as many values as expected");
-    }
-
-    // week_percentages holds the 12 percentages, we just need to get the 8 highest and average
 
     println!(
         "week percentages before sorting are: {:?}",
         week_percentages
     );
+
     week_percentages.sort_by(|a, b| b.cmp(a));
     println!("after sorting the percentages are: {:?}", week_percentages);
 
-    // list is sorted by now, now we need to get the averages of the top 9
-    let top_9_percentages = &week_percentages[0..8]; // I didn't know that for ranges the right and left side were inclusive
-    println!("top 9 values are {:?}", top_9_percentages);
-
-    let top_9_sum: u16 = top_9_percentages.iter().map(|x| *x as u16).sum(); // I'm not fully sure how slices and vectors work, I need to study
-    let average = top_9_sum.div(top_9_percentages.len() as u16);
-    print!("Final average is {:}", average);
+    let belt = get_belt_from_percentages(week_percentages);
+    print!("Final average is {:}", belt);
 }
 
-fn run_simulation(days_to_work_oof: u8, frequency_to_work_oof: u8) {
-    let cal = bdays::calendars::us::USSettlement;
-
-    let mut current_day = Local::now();
-    let mut future_date = get_next_monday(current_day);
-    println!("Next monday from today is {:}", future_date);
-
-    let mut week_percentages: Vec<u8> = vec![]; // This vector will hold the percentages for each week
-
-    let max_number_of_weeks: u8 = 12;
-
-    for week_number in 0..max_number_of_weeks {
-        println!(
-            "Estimating percentage of attendance for week {}",
-            week_number + 1
-        );
-
-        let mut percentage_total: u8 = 0; // This var will hold the final percentage for this week
-
-        while future_date.weekday() != Weekday::Sat {
-            if cal.is_bday(future_date) {
-                println!(
-                    "Day {} is a business day so we need to go to work",
-                    future_date
-                );
-                percentage_total += 20;
-            } else if cal.is_holiday(future_date) {
-                println!(
-                    "Yupiiee, {} is a holiday so we count it for us", // TODO need to confirm if holidays count for me
-                    future_date
-                );
-                percentage_total += 20;
-            }
-
-            future_date = future_date
-                .checked_add_days(Days::new(1))
-                .expect("Should be able to add days");
-        }
+/// Returns the belt (Best Eight Last Twelve) from a list of vectors that should
+/// hold the percentage of attendance for weeks.
+fn get_belt_from_percentages(percentages: Vec<u8>) -> u16 {
+    if (percentages.len() < 12) {
+        panic!("The final list of percentages doesn't have as many values as expected");
     }
+    let top_9_percentages = &percentages[0..8];
+    println!("top 9 values are {:?}", top_9_percentages);
+    let top_9_sum: u16 = top_9_percentages.iter().map(|x| *x as u16).sum(); // I'm not fully sure how slices and vectors work, I need to study
+    top_9_sum.div(top_9_percentages.len() as u16)
 }
 
-fn simulate_week(week_day: DateTime<Local>, calendar: &USSettlement) {
-    while week_day.weekday() != Weekday::Sat {
-        if calendar.is_bday(week_day) {
-            println!("Day is a business day so we need to go to work");
+// For this function we need to use DateTime<Local> otherwise it doesn't compile
+// if we try to use a TimeZone generic parameter then we run into issues since
+// the TimeZone generic does not implement the copy trait by default
+// NOTE that this function won't advance week_day along, it is your responsibility
+// to move it to the next date you want to start from.
+fn get_weeks_percentage_add(week_day: &DateTime<Local>, calendar: &USSettlement) -> u8 {
+    // TODO let's make this method clone week_day and then we can modify the clone as we want
+    // here, then the caller will have to move the week_day to the beginning (Monday) of next week
+    //
+
+    let mut current_day = week_day.clone();
+    let mut percentage_total: u8 = 0;
+    while current_day.weekday() != Weekday::Sat {
+        if calendar.is_bday(current_day) {
+            println!(
+                "Day {} is a business day so we need to go to work",
+                current_day
+            );
+            percentage_total += 20; // we are assuming that each week has 5 days
+        } else if calendar.is_holiday(current_day) {
+            println!(
+                "Yupiieee, {} is a holiday so we automatically get credit for it",
+                current_day
+            );
+            percentage_total += 20;
         }
-    } // TODO finish this so it doesn't fail. we need to use a DateTime<local> for it work
-      // maybe we will need to to make it mutable as well
+
+        current_day = current_day
+            .checked_add_days(Days::new(1))
+            .expect("Should be able to add days");
+    }
+    percentage_total
 }
 
 // I tried other ways but I couldn't do that, this is the only thing that worked for me
@@ -207,3 +161,5 @@ fn get_next_monday<T: TimeZone>(current_date: DateTime<T>) -> DateTime<T> {
     }
     next_monday
 }
+
+//todo now let's add automatic testing to make sure that this is working fine
