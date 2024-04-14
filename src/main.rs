@@ -154,6 +154,12 @@ fn get_weeks_percentage_add(week_day: &DateTime<Local>, calendar: &USSettlement)
 // I tried other ways but I couldn't do that, this is the only thing that worked for me
 fn get_next_monday<T: TimeZone>(current_date: DateTime<T>) -> DateTime<T> {
     let mut next_monday: DateTime<T> = current_date.clone();
+
+    // Probably there are better ways to do this but I'm tired right now
+    next_monday = next_monday
+        .checked_add_days(Days::new(1))
+        .expect("Should be able to add days");
+
     while next_monday.weekday() != Weekday::Mon {
         next_monday = next_monday
             .checked_add_days(Days::new(1))
@@ -163,3 +169,63 @@ fn get_next_monday<T: TimeZone>(current_date: DateTime<T>) -> DateTime<T> {
 }
 
 //todo now let's add automatic testing to make sure that this is working fine
+
+#[cfg(test)]
+mod tests {
+    use chrono::{Datelike, TimeZone, Utc};
+
+    use crate::{get_belt_from_percentages, get_next_monday};
+
+    #[test]
+    fn test_belt_simple_vector() {
+        let vector_sample = vec![10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10];
+        let belt = get_belt_from_percentages(vector_sample);
+        assert_eq!(belt, 10);
+    }
+
+    #[test]
+    #[should_panic(expected = "final list of percentages doesn't have as many values")]
+    fn test_belt_fails_small_vector() {
+        let vector_sample = vec![1, 2, 3, 4];
+        get_belt_from_percentages(vector_sample);
+    }
+
+    #[test]
+    fn test_belt_trickier_vectors() {
+        let vector_sample = vec![10, 10, 10, 10, 10, 10, 10, 10, 0, 0, 0, 0];
+        let belt = get_belt_from_percentages(vector_sample);
+        assert_eq!(belt, 10);
+    }
+
+    #[test]
+    fn test_belt_trickiest_vector() {
+        let vector_sample = vec![2, 4, 6, 8, 10, 12, 14, 16, 0, 0, 0, 0];
+        let belt = get_belt_from_percentages(vector_sample);
+        assert_eq!(belt, 9);
+    }
+
+    #[test]
+    fn test_get_next_monday_from_any_day() {
+        let any_day = Utc
+            .with_ymd_and_hms(2024, 04, 16, 01, 01, 01)
+            .single()
+            .expect("Should map to a single timezone"); // This is monday april 15th 2024. This date should be static
+        let next_monday = get_next_monday(any_day);
+        assert_ne!(any_day.date_naive().day0(), next_monday.date_naive().day0());
+        assert_eq!(next_monday.date_naive().day0(), 21); // The next monday after the 16th is the 22nd
+    }
+
+    #[test]
+    fn test_get_next_monday_from_a_monday() {
+        let a_monday = Utc
+            .with_ymd_and_hms(2024, 04, 15, 01, 01, 01)
+            .single()
+            .expect("Should map to a single timezone");
+        let next_monday = get_next_monday(a_monday);
+        assert_ne!(
+            a_monday.date_naive().day0(),
+            next_monday.date_naive().day0()
+        );
+        assert_ne!(next_monday.date_naive().day0(), 22);
+    }
+}
